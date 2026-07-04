@@ -5,7 +5,11 @@ on:
     branches:
       - main
       - master
-  workflow_dispatch: # allow manual trigger
+  workflow_dispatch: # 允许手动触发
+
+# 部署所需权限
+permissions:
+  contents: read
 
 jobs:
   deploy:
@@ -16,21 +20,24 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate worker types
-        run: npx wrangler types
+      - name: Build (dry-run)
+        run: npm run build
 
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CF_API_TOKEN }}
-          # Environment variables for admin credentials are set in Cloudflare Dashboard
-          # https://dash.cloudflare.com/ -> Workers & Pages -> aiagent-proxy -> Settings -> Variables
-          # Add: ADMIN_USERNAME and ADMIN_PASSWORD
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          # 管理员账号密码等敏感环境变量需在 Cloudflare Dashboard 手动设置：
+          # https://dash.cloudflare.com/ -> Workers & Pages -> ai-gateway -> Settings -> Variables
+          #   - ADMIN_USERNAME
+          #   - ADMIN_PASSWORD
+          # KV 命名空间 AI_GATEWAY 由 wrangler.toml 按名称自动解析。
