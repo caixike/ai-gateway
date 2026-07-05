@@ -1,6 +1,36 @@
 import { Context } from 'hono'
 import { getProvider, getProviders } from './storage'
+import { KV_KEYS } from './config'
 import type { Env, ProxyRequestBody } from './types'
+
+// ===== Key 健康状态类型和辅助函数 =====
+
+interface KeyHealth {
+  failures: number
+  lastFailed: boolean
+}
+type HealthMap = Record<string, KeyHealth>
+
+const HEALTH_KEY = (providerId: string) => KV_KEYS.KEY_HEALTH_PREFIX + providerId
+
+async function readHealth(env: Env, providerId: string): Promise<HealthMap> {
+  const raw = await env.KV.get(HEALTH_KEY(providerId))
+  return raw ? JSON.parse(raw) : {}
+}
+
+async function writeHealth(env: Env, providerId: string, health: HealthMap): Promise<void> {
+  // 只保存有失败记录的 key，避免 KV 膨胀
+  const filtered: HealthMap = {}
+  for (const [k, v] of Object.entries(health)) {
+    if (v.failures > 0) filtered[k] = v
+  }
+  if (Object.keys(filtered).length > 0) {
+    await env.KV.put(HEALTH_KEY(providerId), JSON.stringify(filtered))
+  } else {
+    // 全部健康，删除 KV 条目
+    await env.KV.delete(HEALTH_KEY(providerId)).catch(() => {})
+  }
+}
 
 /** 解析模型 ID，如 "deepseek/deepseek-chat" → { providerId, modelId } */
 function parseModelId(model: string): { providerId: string; modelId: string } | null {
@@ -131,16 +161,44 @@ export async function handleProxy(c: Context<{ Bindings: Env }>) {
     const cleanBase = provider.baseUrl.replace(/\/$/, '')
     const forwardUrl = `${cleanBase}/${subPath}${url.search}`
 
-    // 打乱 key 顺序实现随机轮询 + 失败重试
-    const keyIndices = Array.from({ length: enabledKeys.length }, (_, i) => i)
-    for (let i = keyIndices.length - 1; i > 0; i--) {
+    // 按健康状态排序 key：健康→洗牌，不健康→末尾，连续失败3次→降权排除
+    const healthData = await readHealth(c.env, providerId)
+    const healthy: number[] = []
+    const unhealthy: number[] = []
+    const demoted: number[] = []
+
+    if (enabledKeys.length === 1) {
+      // 只有一个 key，跳过健康检查，直接使用
+      healthy.push(0)
+    } else {
+      for (let i = 0; i < enabledKeys.length; i++) {
+        const h = healthData[enabledKeys[i].key]
+        if (h && h.failures >= 3) {
+          demoted.push(i)
+        } else if (h && h.lastFailed) {
+          unhealthy.push(i)
+        } else {
+          healthy.push(i)
+        }
+      }
+    }
+
+    // Fisher-Yates 洗牌（仅健康 key）
+    for (let i = healthy.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [keyIndices[i], keyIndices[j]] = [keyIndices[j], keyIndices[i]]
+      [healthy[i], healthy[j]] = [healthy[j], healthy[i]]
+    }
+
+    const keyOrder = [...healthy, ...unhealthy]
+    // 有降权 key 时记录一条日志
+    if (demoted.length > 0) {
+      console.log(`[proxy] ${providerId}: ${demoted.length} key(s) demoted (>=3 consecutive failures)`)
     }
 
     let lastError: Response | null = null
+    let healthUpdated = false
 
-    for (const keyIndex of keyIndices) {
+    for (const keyIndex of keyOrder) {
       const apiKey = enabledKeys[keyIndex].key
       try {
         const forwardHeaders: Record<string, string> = {
@@ -161,6 +219,13 @@ export async function handleProxy(c: Context<{ Bindings: Env }>) {
         })
 
         if (response.ok) {
+          // 成功：重置健康状态
+          if (healthData[apiKey]?.failures > 0) {
+            delete healthData[apiKey]
+            healthUpdated = true
+          }
+          if (healthUpdated) await writeHealth(c.env, providerId, healthData)
+
           const responseHeaders: Record<string, string> = {
             'Content-Type': response.headers.get('Content-Type') || 'application/json',
             'Cache-Control': 'no-store',
@@ -171,8 +236,13 @@ export async function handleProxy(c: Context<{ Bindings: Env }>) {
           })
         }
 
-        // 401/403/429/5xx 尝试下一个 key
+        // 401/403/429/5xx 尝试下一个 key（标记失败）
         if (response.status === 401 || response.status === 403 || response.status === 429 || response.status >= 500) {
+          const h = healthData[apiKey] || { failures: 0, lastFailed: false }
+          h.failures++
+          h.lastFailed = true
+          healthData[apiKey] = h
+          healthUpdated = true
           lastError = response
           continue
         }
@@ -182,12 +252,21 @@ export async function handleProxy(c: Context<{ Bindings: Env }>) {
         return c.json(errorData, response.status as Parameters<typeof c.json>[1])
       } catch (err) {
         const error = err as Error
+        // 网络错误也标记为失败
+        const h = healthData[apiKey] || { failures: 0, lastFailed: false }
+        h.failures++
+        h.lastFailed = true
+        healthData[apiKey] = h
+        healthUpdated = true
         lastError = new Response(JSON.stringify({
           error: { message: error.message || '请求失败', type: 'proxy_error' },
         }), { status: 502 })
         continue
       }
     }
+
+    // 写回健康状态
+    if (healthUpdated) await writeHealth(c.env, providerId, healthData)
 
     // 所有 key 均失败
     if (lastError) {

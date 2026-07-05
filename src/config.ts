@@ -19,6 +19,7 @@ export const KV_KEYS = {
   PROVIDERS: 'providers',
   PROXY_KEYS: 'proxy:keys',
   SESSION_PREFIX: 'admin:session:',
+  KEY_HEALTH_PREFIX: 'key:health:',
 } as const
 
 // 有效期选项（秒）
@@ -38,8 +39,8 @@ export const DEFAULT_PROVIDERS: Provider[] = [
     apiType: 'openai',
     apiKeys: [],
     models: [
-      { id: 'deepseek-chat', enabled: true },
-      { id: 'deepseek-reasoner', enabled: true },
+      { id: 'deepseek-v4-flash', enabled: true },
+      { id: 'deepseek-v4-pro', enabled: true },
     ],
     enabled: true,
     createdAt: new Date().toISOString(),
@@ -54,8 +55,8 @@ export const DEFAULT_PROVIDERS: Provider[] = [
     models: [
       { id: 'gpt-4o', enabled: true },
       { id: 'gpt-4o-mini', enabled: true },
-      { id: 'o3-mini', enabled: true },
-      { id: 'o4-mini', enabled: true },
+      { id: 'gpt-5.5', enabled: true },
+      { id: 'gpt-5', enabled: true },
     ],
     enabled: true,
     createdAt: new Date().toISOString(),
@@ -68,9 +69,9 @@ export const DEFAULT_PROVIDERS: Provider[] = [
     apiType: 'anthropic',
     apiKeys: [],
     models: [
-      { id: 'claude-sonnet-4-20250514', enabled: true },
-      { id: 'claude-3-5-sonnet-20241022', enabled: true },
-      { id: 'claude-3-5-haiku-20241022', enabled: true },
+      { id: 'claude-opus-4-8', enabled: true },
+      { id: 'claude-sonnet-5', enabled: true },
+      { id: 'claude-fable-5', enabled: true },
     ],
     enabled: true,
     createdAt: new Date().toISOString(),
@@ -83,9 +84,9 @@ export const DEFAULT_PROVIDERS: Provider[] = [
     apiType: 'openai',
     apiKeys: [],
     models: [
-      { id: 'gemini-2.5-pro-exp-03-25', enabled: true },
-      { id: 'gemini-2.5-flash-preview-04-17', enabled: true },
-      { id: 'gemini-2.0-flash', enabled: true },
+      { id: 'gemini-3.5-flash', enabled: true },
+      { id: 'gemini-3.1-pro', enabled: true },
+      { id: 'gemini-3.1-flash-lite', enabled: true },
     ],
     enabled: true,
     createdAt: new Date().toISOString(),

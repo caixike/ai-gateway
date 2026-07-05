@@ -75,7 +75,7 @@ export interface ApiResponse<T = unknown> {
 }
 
 export interface Env {
-  AI_GATEWAY: KVNamespace
+  KV: KVNamespace
   ADMIN_USERNAME?: string
   ADMIN_PASSWORD?: string
 }

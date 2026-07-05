@@ -5,7 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 # KV namespace — wrangler will auto-resolve by name
 [[kv_namespaces]]
-binding = "AI_GATEWAY"
+binding = "KV"
 
 # Admin credentials (set these in Cloudflare Dashboard > Workers > Variables)
 # [vars]

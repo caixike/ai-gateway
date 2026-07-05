@@ -4,7 +4,7 @@ import type { Env, Provider, ProxyKey, Session } from './types'
 // ===== 提供商 CRUD =====
 
 export async function getProviders(env: Env): Promise<Provider[]> {
-  const data = await env.AI_GATEWAY.get(KV_KEYS.PROVIDERS)
+  const data = await env.KV.get(KV_KEYS.PROVIDERS)
   return data ? JSON.parse(data) : []
 }
 
@@ -14,7 +14,7 @@ export async function getProvider(env: Env, id: string): Promise<Provider | null
 }
 
 export async function setProviders(env: Env, providers: Provider[]): Promise<void> {
-  await env.AI_GATEWAY.put(KV_KEYS.PROVIDERS, JSON.stringify(providers))
+  await env.KV.put(KV_KEYS.PROVIDERS, JSON.stringify(providers))
 }
 
 export async function addProvider(env: Env, provider: Provider): Promise<void> {
@@ -48,14 +48,14 @@ export async function createSession(env: Env, username: string, ttlSeconds: numb
     username,
     expiresAt: Date.now() + ttlSeconds * 1000,
   }
-  await env.AI_GATEWAY.put(KV_KEYS.SESSION_PREFIX + sessionId, JSON.stringify(session), {
+  await env.KV.put(KV_KEYS.SESSION_PREFIX + sessionId, JSON.stringify(session), {
     expirationTtl: ttlSeconds,
   })
   return sessionId
 }
 
 export async function getSession(env: Env, sessionId: string): Promise<Session | null> {
-  const data = await env.AI_GATEWAY.get(KV_KEYS.SESSION_PREFIX + sessionId)
+  const data = await env.KV.get(KV_KEYS.SESSION_PREFIX + sessionId)
   if (!data) return null
   const session: Session = JSON.parse(data)
   if (session.expiresAt < Date.now()) {
@@ -66,18 +66,18 @@ export async function getSession(env: Env, sessionId: string): Promise<Session |
 }
 
 export async function deleteSession(env: Env, sessionId: string): Promise<void> {
-  await env.AI_GATEWAY.delete(KV_KEYS.SESSION_PREFIX + sessionId)
+  await env.KV.delete(KV_KEYS.SESSION_PREFIX + sessionId)
 }
 
 // ===== 转发 Key =====
 
 export async function getProxyKeys(env: Env): Promise<ProxyKey[]> {
-  const data = await env.AI_GATEWAY.get(KV_KEYS.PROXY_KEYS)
+  const data = await env.KV.get(KV_KEYS.PROXY_KEYS)
   return data ? JSON.parse(data) : []
 }
 
 export async function setProxyKeys(env: Env, keys: ProxyKey[]): Promise<void> {
-  await env.AI_GATEWAY.put(KV_KEYS.PROXY_KEYS, JSON.stringify(keys))
+  await env.KV.put(KV_KEYS.PROXY_KEYS, JSON.stringify(keys))
 }
 
 export async function addProxyKey(env: Env, key: ProxyKey): Promise<void> {
