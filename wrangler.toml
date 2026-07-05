@@ -2,6 +2,7 @@ name = "ai-gateway"
 main = "src/index.ts"
 compatibility_date = "2025-07-01"
 compatibility_flags = ["nodejs_compat"]
+keep_vars = true
 
 # KV namespace — wrangler will auto-resolve by name
 [[kv_namespaces]]

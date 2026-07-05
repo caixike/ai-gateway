@@ -24,6 +24,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate wrangler.toml with admin credentials
+        run: |
+          cat > wrangler.toml << EOF
+          name = "ai-gateway"
+          main = "src/index.ts"
+          compatibility_date = "2025-07-01"
+          compatibility_flags = ["nodejs_compat"]
+          keep_vars = true
+
+          [[kv_namespaces]]
+          binding = "KV"
+
+          [vars]
+          ADMIN_USERNAME = ${{ vars.ADMIN_USERNAME }}
+          ADMIN_PASSWORD = ${{ vars.ADMIN_PASSWORD }}
+          EOF
+
       - name: Build (dry-run)
         run: npm run build
 
@@ -32,8 +49,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
-          # 管理员账号密码等敏感环境变量需在 Cloudflare Dashboard 手动设置：
-          # https://dash.cloudflare.com/ -> Workers & Pages -> ai-gateway -> Settings -> Variables
-          #   - ADMIN_USERNAME
-          #   - ADMIN_PASSWORD
-          # KV 命名空间 AI_GATEWAY 由 wrangler.toml 按名称自动解析。
+

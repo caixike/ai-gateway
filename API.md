@@ -150,7 +150,15 @@ Authorization: Bearer sk_cf_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
 1. 解析 `model` 字段中的 `提供商ID/模型ID`，定位提供商与模型配置
 2. 校验提供商/模型是否启用、是否配置了可用 API Key
 3. 将请求体中的 `model` 改写为纯 `模型ID`，路径去除 `/v1/` 前缀拼接到提供商 `baseUrl`
-4. 随机打乱已启用的 API Key 顺序，依次尝试；遇 `401/403/429/5xx` 自动切换下一个 Key，其他错误（如 `400/404`）直接返回
+4. **Key 排序与健康检查**：
+   - 读取该提供商下每个 Key 的历史健康状态（基于 KV 持久化）
+   - **健康 Key**（无失败记录）：Fisher-Yates 洗牌后优先使用
+   - **不健康 Key**（有失败记录，< 3 次）：追加到队列末尾
+   - **降权 Key**（连续失败 >= 3 次）：排除，不参与轮询
+   - 仅有 1 个 Key 时跳过所有健康检查
+5. 按排序后的顺序依次尝试；遇 `401/403/429/5xx` 或网络错误时标记该 Key 失败并切换下一个，成功时重置该 Key 的健康状态
+
+**Key 健康状态**存储在 KV 中（`key:health:{providerId}`），每次请求后更新，仅保留有失败记录的 Key。
 
 > Anthropic 协议的提供商请求会使用 `x-api-key` + `anthropic-version: 2023-06-01` 头；OpenAI 协议使用 `Authorization: Bearer <key>` 头。请求超时为 60 秒。
 
