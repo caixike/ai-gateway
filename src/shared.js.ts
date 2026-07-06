@@ -18,7 +18,6 @@ function showResult(el, success, msg) {
   el.innerHTML = success
     ? '<div class="al al-s"><i class="fas fa-check-circle"></i> 连接成功</div>'
     : '<div class="al al-e"><i class="fas fa-times-circle"></i> ' + (msg || '连接失败') + '</div>'
-  setTimeout(function() { el.innerHTML = '' }, 5000)
 }
 
 // ── API 请求函数 ──
