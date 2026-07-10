@@ -180,8 +180,8 @@ ${H('管理')}
   </div>
 
   <!-- 添加表单 -->
-  <div style="display:flex;gap:12px;margin-bottom:12px;">
-  <div id="af" class="hd add-form-panel">
+  <div class="af-w">
+	  <div id="af" class="hd add-form-panel">
     <h3 class="fs-88 mb-10"><i class="fas fa-plus-circle c-p"></i> 添加新提供商</h3>
     <div class="fr">
       <div class="fg"><label>名称</label><input type="text" id="anm" placeholder="DeepSeek"></div>
@@ -345,7 +345,8 @@ ${H('管理')}
 <script>${SHARED_JS}
 // copy
 function copyText(t, el) {
-  const i = el.tagName === 'I' ? el : el.querySelector('i')
+  const i = el.tagName === 'I' ? el : (el.querySelector('i') || el.parentElement?.querySelector('i'))
+  if (!i) { navigator.clipboard.writeText(t).catch(() => {}); return }
   const oc = i.className
   const os = i.style.color
   navigator.clipboard.writeText(t).then(() => {
@@ -417,33 +418,38 @@ function addAKeyRow() {
   c.appendChild(d)
 }
 
+function renderModelGrid(models, editId) {
+  if (!models || models.length === 0) return '<span class="mu">未返回模型列表</span>'
+  var h = models.map(function(m) {
+    var addFn = editId
+      ? "addMdlToEdit('" + editId + "','" + m.id + "')"
+      : "addMdlToForm('" + m.id + "')"
+    return '<div class="mdl-item">' +
+      '<i class="fas fa-cube"></i>' +
+	      '<span class="fx1 cp ov" onclick="copyText(\\'' + m.id + '\\',this)">' + m.id + '</span>' +
+      '<button class="btn btn-gh btn-xs mdl-add-btn" onclick="' + addFn + '" title="添加到表单">+</button></div>'
+  }).join('')
+  return '<div class="grid-2-gap6">' + h + '</div>'
+}
+
 function testNewAKey(btn) {
-	  const inp = btn.parentElement.querySelector('.aki'), k = inp.value.trim()
-	  if (!k) { toast('请输入 API Key', 'error'); return }
-	  const url = document.getElementById('aurl').value.trim()
-	  if (!url) { toast('请先填写 API 地址', 'error'); return }
-	  const apiType = document.getElementById('afmt').value
-	  const tr = document.getElementById('atestR')
-	  showSpinner(tr)
-	  testKeyConnection(url, apiType, k).then(function(result) {
-	    if (result.success && result.data) {
-	      var models = result.data.data || []
-	      var h = models.map(function(m) {
-	        return '<div class="mdl-item">' +
-	          '<i class="fas fa-cube"></i>' +
-	          '<span class="fx1 cp ov" onclick="copyText(\\'' + m.id + '\\',this)">' + m.id + '</span>' +
-	          '<button class="btn btn-gh btn-xs mdl-add-btn" onclick="addMdlToForm(\\'' + m.id + '\\')" title="添加到表单">+</button></div>'
-	      }).join('')
-	      document.getElementById('amcl').innerHTML = h
-	        ? '<div class="grid-2-gap6">' + h + '</div>'
-	        : '<span class="mu">未返回模型列表</span>'
-	      document.getElementById('amc').classList.remove('hd')
-	    } else {
-	      document.getElementById('amc').classList.add('hd')
-	    }
-	    showResult(tr, result.success, result.success ? '' : 'HTTP ' + result.status)
-	  })
-	}
+		  const inp = btn.parentElement.querySelector('.aki'), k = inp.value.trim()
+		  if (!k) { toast('请输入 API Key', 'error'); return }
+		  const url = document.getElementById('aurl').value.trim()
+		  if (!url) { toast('请先填写 API 地址', 'error'); return }
+		  const apiType = document.getElementById('afmt').value
+		  const tr = document.getElementById('atestR')
+		  showSpinner(tr)
+		  testKeyConnection(url, apiType, k).then(function(result) {
+		    if (result.success && result.data) {
+		      document.getElementById('amcl').innerHTML = renderModelGrid(result.data.data || [])
+		      document.getElementById('amc').classList.remove('hd')
+		    } else {
+		      document.getElementById('amc').classList.add('hd')
+		    }
+		    showResult(tr, result.success, result.success ? '' : 'HTTP ' + result.status)
+		  })
+		}
 
 let mdlCount = 1
 function addMdlRow() {
@@ -536,15 +542,43 @@ function rmKeyRow(id, idx) {
 }
 
 async function testKeyRow(id, idx) {
-	  const k = document.getElementById('k-' + id + '-' + idx).value.trim()
-	  const url = document.getElementById('url-' + id).value.trim()
-	  if (!k) { toast('请输入 API Key', 'error'); return }
-	  const apiType = document.getElementById('at-' + id).value
-	  const tr = document.getElementById('tr-' + id)
-	  showSpinner(tr)
-	  const result = await testKeyConnection(url, apiType, k)
-	  showResult(tr, result.success, result.success ? '' : 'HTTP ' + result.status)
-	}
+		  const k = document.getElementById('k-' + id + '-' + idx).value.trim()
+		  const url = document.getElementById('url-' + id).value.trim()
+		  if (!k) { toast('请输入 API Key', 'error'); return }
+		  const apiType = document.getElementById('at-' + id).value
+		  const tr = document.getElementById('tr-' + id)
+		  showSpinner(tr)
+		  const result = await testKeyConnection(url, apiType, k)
+		  showResult(tr, result.success, result.success ? '' : 'HTTP ' + result.status)
+		  if (result.success && result.data) {
+		    showEditModelsList(id, result.data.data || [])
+		  }
+		}
+
+function showEditModelsList(id, models) {
+  const cid = 'mel-' + id
+  let el = document.getElementById(cid)
+  if (!el) {
+    el = document.createElement('div')
+    el.id = cid
+    el.className = 'fg'
+    const pd = document.getElementById('dt-' + id)
+    const sections = pd.querySelectorAll('.fg')
+    for (var i = 0; i < sections.length; i++) {
+      var lbl = sections[i].querySelector('label')
+      if (lbl && lbl.textContent === '模型') {
+        pd.insertBefore(el, sections[i])
+        break
+      }
+    }
+  }
+  el.innerHTML = '<label>可用模型 <span class="mu">（点击 + 添加到下方）</span></label>' + renderModelGrid(models, id)
+}
+
+function addMdlToEdit(id, mid) {
+  document.getElementById('nmid-' + id).value = mid
+  addMdl(id)
+}
 
 function getMdl(id) {
   const c = document.getElementById('ml-' + id), items = c.querySelectorAll('[data-idx]')

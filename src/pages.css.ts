@@ -592,10 +592,12 @@ label {
 /* 管理后台面板 */
 .add-form-panel { padding: 14px; background: var(--c-bg-alt); border-radius: 8px; border: 1px dashed var(--c-border-dark); width: calc(50% - 5px); }
 .mdl-list-panel { flex: 1; padding: 14px; background: var(--c-bg-alt); border-radius: 8px; border: 1px dashed var(--c-border-dark); max-height: 420px; overflow-y: auto; }
+.af-w { display: flex; gap: 12px; margin-bottom: 12px; }
 .toast { position: fixed; top: 14px; right: 14px; z-index: 9998; min-width: 260px; }
 
 /* JS 动态生成的 HTML 用 */
 .mdl-item { padding: 5px 8px; border: 1px solid var(--c-border); border-radius: 6px; font-size: .82rem; display: flex; align-items: center; gap: 6px; }
+.mdl-item .fx1 { white-space: normal; overflow-wrap: break-word; }
 .mdl-item i:first-child { color: var(--c-text-secondary); width: 14px; flex-shrink: 0; }
 .mdl-add-btn { flex-shrink: 0; padding: 1px 5px; font-size: .9rem; line-height: 1; }
 .grid-2-gap6 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
@@ -607,7 +609,10 @@ label {
   .pd .fr,
   .pd .fr3 { grid-template-columns: 1fr; }
   .g2 { grid-template-columns: 1fr; }
-  .gp { grid-template-columns: 1fr; }
+	  .gp { grid-template-columns: 1fr; }
+	  .grid-2-gap6 { grid-template-columns: 1fr; }
+	  .af-w { flex-direction: column; }
+  .add-form-panel { width: 100%; }
   .ki { flex-wrap: wrap; }
   .ki > div:first-child { flex: 1 1 100%; overflow: hidden; }
   .ki > .fc { margin-top: 4px; }
