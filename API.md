@@ -195,7 +195,7 @@ OpenCode 是全新部署唯一的默认提供商，默认启用以下模型：
 用户可通过 GitHub Actions Variables 设置 `OPENCODE_MIRRORS_URL`，内容追加到默认地址之后，全局去重（保留首次出现顺序）。设置方式：
 
 - **GitHub 仓库** → Settings → Secrets and variables → Actions → Variables → 新增 `OPENCODE_MIRRORS_URL`
-- 每行一个 URL，不要用逗号
+- 支持换行或逗号分隔，每行/每段一个 URL
 
 若部署时未设置或设为空字符串，则 `mirrorUrls = []`，官方地址失败后不做镜像降级。
 

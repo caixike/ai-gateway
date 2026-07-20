@@ -47,8 +47,18 @@ npm run dev
 2. 选择你的 GitHub 仓库，在构建设置中使用默认选项，点击**保存并部署**
 3. Cloudflare Pages 会自动构建并部署 Worker，同时自动创建 `KV` 命名空间并绑定
 4. 部署完成后，进入 Worker 页面 → **Settings** → **Variables**，添加：
-   - `ADMIN_USERNAME` — 管理后台登录用户名
-   - `ADMIN_PASSWORD` — 管理后台登录密码
+  - `ADMIN_USERNAME` — 管理后台登录用户名
+  - `ADMIN_PASSWORD` — 管理后台登录密码
+  - `OPENCODE_MIRRORS_URL` — OpenCode 镜像地址列表，每行一个 URL或用 `,` 分隔。填写以下三个地址：
+  
+  ```
+  https://opencode.ai.cmliussss.net/zen/v1
+  https://opencode.fastly.cmliussss.net/zen/v1
+  https://opencode.gcore.cmliussss.net/zen/v1
+  ```
+
+  > 以上镜像地址来源于CM大佬，在此表示感谢！
+
 - 建议：绑定一个自定义域名
 
 ### 方式二：GitHub Actions 自动部署
@@ -57,7 +67,7 @@ npm run dev
 
 2. 在 GitHub 仓库 Settings → **Secrets and variables** → **Actions** 中配置：
    - **Secrets**：`CF_API_TOKEN`（Cloudflare API Token，权限需包含 Workers 编辑）
-   - **Variables**：`ADMIN_USERNAME`、`ADMIN_PASSWORD`、`OPENCODE_MIRRORS_URL`（可选，追加额外镜像地址，每行一个）
+   - **Variables**：`ADMIN_USERNAME`、`ADMIN_PASSWORD`、`OPENCODE_MIRRORS_URL`（可选，追加额外镜像地址，每行一个，默认已包含上述三个镜像地址）
 
 3. 在 GitHub 仓库 Actions 页面手动触发 **Deploy to Cloudflare Workers** 工作流
 

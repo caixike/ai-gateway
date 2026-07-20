@@ -45,7 +45,8 @@ export function filterOpenCodeModels<T extends { id?: unknown }>(models: T[]): T
 
 export function resolveOpenCodeUrls(env: Env): string[] {
   const raw = env.OPENCODE_MIRRORS_URL || ''
-  const parts = raw.split('\n').map((s) => s.trim()).filter(Boolean)
+  // 兼容换行符、逗号、空格分隔；过滤空白；全局去重
+  const parts = raw.split('\n').flatMap(s => s.split(',')).map(s => s.trim()).filter(Boolean)
   return [...new Set(parts)]
 }
 
