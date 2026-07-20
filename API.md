@@ -95,12 +95,12 @@ Authorization: Bearer sk_cf_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
   "object": "list",
   "data": [
     {
-      "id": "deepseek/deepseek-chat",
-      "provider": "deepseek",
-      "provider_name": "DeepSeek",
+      "id": "opencode/deepseek-v4-flash-free",
+      "provider": "opencode",
+      "provider_name": "OpenCode",
       "object": "model",
       "created": 1712345678,
-      "owned_by": "deepseek"
+      "owned_by": "opencode"
     }
   ]
 }
@@ -115,7 +115,7 @@ Authorization: Bearer sk_cf_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
 **请求体**:
 ```json
 {
-  "model": "deepseek/deepseek-chat",
+  "model": "opencode/deepseek-v4-flash-free",
   "messages": [{"role": "user", "content": "Hello!"}]
 }
 ```
@@ -162,6 +162,44 @@ Authorization: Bearer sk_cf_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
 **Key 健康状态**存储在 KV 中（`key:health:{providerId}`），每次请求后更新，仅保留有失败记录的 Key。
 
 > Anthropic 协议的提供商请求会使用 `x-api-key` + `anthropic-version: 2023-06-01` 头；OpenAI 协议使用 `Authorization: Bearer <key>` 头。请求超时为 60 秒。
+
+#### OpenCode 专用故障转移
+
+OpenCode 是全新部署唯一的默认提供商，默认启用以下模型：
+
+- `deepseek-v4-flash-free`
+- `mimo-v2.5-free`
+- `nemotron-3-ultra-free`
+- `hy3-free`
+
+默认官方地址为 `https://opencode.ai/zen/v1`，上游 API Key 可以留空：
+
+1. 配置了启用的 Key 时，先使用后台配置的 OpenCode 地址和用户 Key。
+2. 官方请求未成功后，从随机起点依次尝试三个固定公共镜像。
+3. 未配置 Key 时直接进入公共镜像链路。
+4. 公共镜像使用内置 `Authorization: Bearer public`，不会写入 KV 或显示在管理页。
+5. 镜像遇到网络错误、超时或任意非成功 HTTP 状态时继续下一镜像；每个镜像最多尝试一次。
+6. 一旦收到成功响应便直接透传，包括 SSE 流式响应；流中途失败不会重新请求。
+7. 后台检测到的 OpenCode 模型列表仅显示 `big-pickle` 和以 `-free` 结尾的模型 ID。
+
+### 环境变量 `OPENCODE_MIRRORS_URL`
+
+类型：`string`（多行文本，每行一个 URL）
+
+控制 OpenCode 镜像降级时使用的地址列表。默认值由部署脚本写入三个镜像地址：
+
+- `https://opencode.ai.cmliussss.net/zen/v1`
+- `https://opencode.fastly.cmliussss.net/zen/v1`
+- `https://opencode.gcore.cmliussss.net/zen/v1`
+
+用户可通过 GitHub Actions Variables 设置 `OPENCODE_MIRRORS_URL`，内容追加到默认地址之后，全局去重（保留首次出现顺序）。设置方式：
+
+- **GitHub 仓库** → Settings → Secrets and variables → Actions → Variables → 新增 `OPENCODE_MIRRORS_URL`
+- 每行一个 URL，不要用逗号
+
+若部署时未设置或设为空字符串，则 `mirrorUrls = []`，官方地址失败后不做镜像降级。
+
+已有 KV 中的 Provider 不会被删除或覆盖；缺少 `opencode` 时只追加默认配置。其他 Provider 仍使用原有单地址和 Key 健康调度逻辑。
 
 ---
 

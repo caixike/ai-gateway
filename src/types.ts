@@ -78,4 +78,5 @@ export interface Env {
   KV: KVNamespace
   ADMIN_USERNAME?: string
   ADMIN_PASSWORD?: string
+  OPENCODE_MIRRORS_URL?: string
 }

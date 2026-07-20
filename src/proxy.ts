@@ -2,6 +2,7 @@ import { Context } from 'hono'
 import { getProvider, getProviders } from './storage'
 import { KV_KEYS, KEY_HEALTH_COOLDOWN_MS, KEY_HEALTH_MAX_FAILURES } from './config'
 import type { Env, ProxyRequestBody } from './types'
+import { isOpenCodeProvider, proxyOpenCodeRequest, resolveOpenCodeUrls } from './opencode'
 
 // ===== Key 健康状态类型和辅助函数 =====
 
@@ -150,15 +151,33 @@ export async function handleProxy(c: Context<{ Bindings: Env }>) {
     }
 
     const enabledKeys = provider.apiKeys.filter(k => k.enabled)
+    const forwardBody = { ...body, model: modelId }
+    const url = new URL(c.req.url)
+    const subPath = url.pathname.replace(/^\/v1\//, '') || 'chat/completions'
+
+    if (isOpenCodeProvider(providerId)) {
+      const response = await proxyOpenCodeRequest({
+        baseUrl: provider.baseUrl,
+        apiKeys: enabledKeys,
+        method: c.req.method,
+        subPath,
+        search: url.search,
+        body: JSON.stringify(forwardBody),
+        mirrorUrls: resolveOpenCodeUrls(c.env),
+      })
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      })
+    }
+
     if (enabledKeys.length === 0) {
       return c.json({
         error: { message: `提供商 "${provider.name}" 未配置可用的 API Key`, type: 'configuration_error' },
       }, 500)
     }
 
-    const forwardBody = { ...body, model: modelId }
-    const url = new URL(c.req.url)
-    const subPath = url.pathname.replace(/^\/v1\//, '') || 'chat/completions'
     const cleanBase = provider.baseUrl.replace(/\/$/, '')
     const forwardUrl = `${cleanBase}/${subPath}${url.search}`
 

@@ -11,6 +11,7 @@ import {
   deleteProxyKey,
 } from './storage'
 import { testModelConnection } from './proxy'
+import { fetchOpenCodeModels, isOpenCodeProvider, resolveOpenCodeUrls, testOpenCodeModel } from './opencode'
 import { PROXY_KEY_PREFIX, EXPIRY_OPTIONS } from './config'
 import type {
   Env,
@@ -156,12 +157,13 @@ export async function handleTestModel(c: Context<{ Bindings: Env }>) {
   }
 
   const enabledKeys = provider.apiKeys.filter(k => k.enabled)
-  if (enabledKeys.length === 0) {
+  if (!isOpenCodeProvider(provider.id) && enabledKeys.length === 0) {
     return c.json<ApiResponse>({ success: false, message: '该提供商未配置可用的 API Key' }, 400)
   }
 
-  const apiKey = enabledKeys[0].key
-  const result = await testModelConnection(provider.baseUrl, apiKey, modelId, provider.apiType)
+  const result = isOpenCodeProvider(provider.id)
+    ? await testOpenCodeModel(provider.baseUrl, enabledKeys, modelId, resolveOpenCodeUrls(c.env))
+    : await testModelConnection(provider.baseUrl, enabledKeys[0].key, modelId, provider.apiType)
 
   return c.json<ApiResponse>({
     success: true,
@@ -179,9 +181,27 @@ function buildAuthHeaders(apiKey: string, apiType?: string): Record<string, stri
 }
 
 export async function handleTestKeyNew(c: Context<{ Bindings: Env }>) {
-  const { url, apiKey, apiType } = await c.req.json<{ url: string; apiKey: string; apiType?: string }>()
+  const { url, apiKey, apiType, providerId } = await c.req.json<{
+    url: string
+    apiKey: string
+    apiType?: string
+    providerId?: string
+  }>()
   if (!url || !apiKey) {
     return c.json<ApiResponse>({ success: false, message: 'url 和 apiKey 为必填项' }, 400)
+  }
+
+  if (providerId && isOpenCodeProvider(providerId)) {
+    const result = await fetchOpenCodeModels(url, [{ key: apiKey, enabled: true }], resolveOpenCodeUrls(c.env))
+    return c.json<ApiResponse>({
+      success: true,
+      data: {
+        success: result.success,
+        statusCode: result.statusCode || 0,
+        message: result.message,
+        data: result.data,
+      },
+    })
   }
 
   const cleanBase = url.replace(/\/$/, '')
@@ -208,9 +228,24 @@ export async function handleTestKeyNew(c: Context<{ Bindings: Env }>) {
 }
 
 export async function handleTestModelNew(c: Context<{ Bindings: Env }>) {
-  const { url, apiKey, apiType, model } = await c.req.json<{ url: string; apiKey: string; apiType?: string; model: string }>()
-  if (!url || !apiKey || !model) {
+  const { url, apiKey, apiType, model, providerId } = await c.req.json<{
+    url: string
+    apiKey: string
+    apiType?: string
+    model: string
+    providerId?: string
+  }>()
+  if (!url || !model || (!apiKey && !isOpenCodeProvider(providerId || ''))) {
     return c.json<ApiResponse>({ success: false, message: 'url、apiKey、model 为必填项' }, 400)
+  }
+
+  if (providerId && isOpenCodeProvider(providerId)) {
+    const apiKeys = apiKey ? [{ key: apiKey, enabled: true }] : []
+    const result = await testOpenCodeModel(url, apiKeys, model, resolveOpenCodeUrls(c.env))
+    return c.json<ApiResponse>({
+      success: true,
+      data: { success: result.success, statusCode: result.statusCode || 0, message: result.message },
+    })
   }
 
   const cleanBase = url.replace(/\/$/, '')

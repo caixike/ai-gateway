@@ -29,6 +29,16 @@ jobs:
 
       - name: Generate wrangler.toml with admin credentials
         run: |
+          DEFAULT_URLS=(
+            "https://opencode.ai.cmliussss.net/zen/v1"
+            "https://opencode.fastly.cmliussss.net/zen/v1"
+            "https://opencode.gcore.cmliussss.net/zen/v1"
+          )
+          MIRRORS_URL=$(printf '%s\\n' "${DEFAULT_URLS[@]}" | sed '$s/\\n$//')
+          EXTRA_URLS="${{ vars.OPENCODE_MIRRORS_URL }}"
+          if [ -n "$EXTRA_URLS" ]; then
+            MIRRORS_URL="${MIRRORS_URL}\n${EXTRA_URLS}"
+          fi
           cat > wrangler.toml << EOF
           name = "ai-gateway"
           main = "src/index.ts"
@@ -42,6 +52,7 @@ jobs:
           [vars]
           ADMIN_USERNAME = ${{ vars.ADMIN_USERNAME }}
           ADMIN_PASSWORD = ${{ vars.ADMIN_PASSWORD }}
+          OPENCODE_MIRRORS_URL = "${MIRRORS_URL}"
           EOF
 
       - name: Build (dry-run)
@@ -52,4 +63,3 @@ jobs:
         with:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
-

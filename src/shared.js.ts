@@ -2,8 +2,16 @@
 export const SHARED_JS = `
 // ── 工具函数 ──
 function normalizeUrl(url) {
-	  return url.replace(/\\/$/, '')
-	}
+    return url.replace(/\\/$/, '')
+  }
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
 function buildAuthHeaders(apiType, key) {
   return apiType === 'anthropic'
     ? { 'x-api-key': key, 'anthropic-version': '2023-06-01' }
@@ -17,16 +25,16 @@ function showSpinner(el) {
 function showResult(el, success, msg) {
   el.innerHTML = success
     ? '<div class="al al-s"><i class="fas fa-check-circle"></i> 连接成功</div>'
-    : '<div class="al al-e"><i class="fas fa-times-circle"></i> ' + (msg || '连接失败') + '</div>'
+    : '<div class="al al-e"><i class="fas fa-times-circle"></i> ' + escapeHtml(msg || '连接失败') + '</div>'
 }
 
 // ── API 请求函数 ──
-async function testKeyConnection(url, apiType, key) {
+async function testKeyConnection(url, apiType, key, providerId) {
   try {
     var r = await fetch('/admin/api/test-key', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: url, apiKey: key, apiType: apiType })
+      body: JSON.stringify({ url: url, apiKey: key, apiType: apiType, providerId: providerId })
     })
     var d = await r.json()
     if (d.success && d.data) {
@@ -37,12 +45,12 @@ async function testKeyConnection(url, apiType, key) {
     return { success: false, status: 0, data: null }
   }
 }
-async function testModelConnection(url, apiType, key, modelId) {
+async function testModelConnection(url, apiType, key, modelId, providerId) {
   try {
     var r = await fetch('/admin/api/test-model', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: url, apiKey: key, apiType: apiType, model: modelId })
+      body: JSON.stringify({ url: url, apiKey: key, apiType: apiType, model: modelId, providerId: providerId })
     })
     var d = await r.json()
     if (d.success && d.data) {

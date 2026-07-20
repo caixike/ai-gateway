@@ -418,38 +418,46 @@ function addAKeyRow() {
   c.appendChild(d)
 }
 
-function renderModelGrid(models, editId) {
+function renderModelGrid(models, editId, providerId) {
+  if (providerId === 'opencode') {
+    models = (models || []).filter(function(m) {
+      return m && typeof m.id === 'string' && /^[A-Za-z0-9._:/-]+$/.test(m.id) && (m.id === 'big-pickle' || m.id.endsWith('-free'))
+    })
+  }
   if (!models || models.length === 0) return '<span class="mu">未返回模型列表</span>'
   var h = models.map(function(m) {
+    var modelId = String(m.id || '')
+    var safeId = escapeHtml(modelId)
     var addFn = editId
-      ? "addMdlToEdit('" + editId + "','" + m.id + "')"
-      : "addMdlToForm('" + m.id + "')"
+      ? "addMdlToEdit('" + modelId + "','" + editId + "')"
+      : "addMdlToForm('" + modelId + "')"
     return '<div class="mdl-item">' +
       '<i class="fas fa-cube"></i>' +
-	      '<span class="fx1 cp ov" onclick="copyText(\\'' + m.id + '\\',this)">' + m.id + '</span>' +
+			'<span class="fx1 cp ov" onclick="copyText(\\'' + modelId + '\\',this)">' + safeId + '</span>' +
       '<button class="btn btn-gh btn-xs mdl-add-btn" onclick="' + addFn + '" title="添加到表单">+</button></div>'
   }).join('')
   return '<div class="grid-2-gap6">' + h + '</div>'
 }
 
 function testNewAKey(btn) {
-		  const inp = btn.parentElement.querySelector('.aki'), k = inp.value.trim()
-		  if (!k) { toast('请输入 API Key', 'error'); return }
-		  const url = document.getElementById('aurl').value.trim()
-		  if (!url) { toast('请先填写 API 地址', 'error'); return }
-		  const apiType = document.getElementById('afmt').value
-		  const tr = document.getElementById('atestR')
-		  showSpinner(tr)
-		  testKeyConnection(url, apiType, k).then(function(result) {
-		    if (result.success && result.data) {
-		      document.getElementById('amcl').innerHTML = renderModelGrid(result.data.data || [])
-		      document.getElementById('amc').classList.remove('hd')
-		    } else {
-		      document.getElementById('amc').classList.add('hd')
-		    }
-		    showResult(tr, result.success, result.success ? '' : 'HTTP ' + result.status)
-		  })
-		}
+  const inp = btn.parentElement.querySelector('.aki'), k = inp.value.trim()
+  if (!k) { toast('请输入 API Key', 'error'); return }
+  const url = document.getElementById('aurl').value.trim()
+  if (!url) { toast('请先填写 API 地址', 'error'); return }
+  const apiType = document.getElementById('afmt').value
+  const tr = document.getElementById('atestR')
+  showSpinner(tr)
+    const providerId = document.getElementById('aid').value.trim()
+    testKeyConnection(url, apiType, k, providerId).then(function(result) {
+      if (result.success && result.data) {
+        document.getElementById('amcl').innerHTML = renderModelGrid(result.data.data || [], null, providerId)
+      document.getElementById('amc').classList.remove('hd')
+    } else {
+      document.getElementById('amc').classList.add('hd')
+    }
+    showResult(tr, result.success, result.success ? '' : 'HTTP ' + result.status)
+  })
+}
 
 let mdlCount = 1
 function addMdlRow() {
@@ -464,23 +472,25 @@ function addMdlToForm(mid) {
   const c = document.getElementById('amodels')
   const d = document.createElement('div')
   d.className = 'fc mb-4'
-  d.innerHTML = '<input type="text" value="' + mid + '" class="fx1 ami"><label class="tg"><input type="checkbox" checked class="ame"><span class="sl"></span></label><button class="btn btn-gh btn-xs" onclick="testNewMdl(this)"><i class="fas fa-plug"></i></button><button class="btn btn-gh btn-xs" onclick="this.parentElement.remove()"><i class="fas fa-times c-l"></i></button>'
+  d.innerHTML = '<input type="text" value="' + escapeHtml(mid) + '" class="fx1 ami"><label class="tg"><input type="checkbox" checked class="ame"><span class="sl"></span></label><button class="btn btn-gh btn-xs" onclick="testNewMdl(this)"><i class="fas fa-plug"></i></button><button class="btn btn-gh btn-xs" onclick="this.parentElement.remove()"><i class="fas fa-times c-l"></i></button>'
   c.appendChild(d)
 }
 
 function testNewMdl(btn) {
-	  const inp = btn.parentElement.querySelector('.ami'), mid = inp.value.trim()
-	  if (!mid) { toast('请输入模型 ID', 'error'); return }
-	  const url = document.getElementById('aurl').value.trim()
-	  const akeys = document.querySelectorAll('#akeys .aki')
-	  const apiKey = Array.from(akeys).map(function(inp) { return inp.value.trim() }).filter(Boolean)[0] || 'dummy'
-	  const apiType = document.getElementById('afmt').value
-	  const tr = document.getElementById('atestR')
-	  showSpinner(tr)
-	  testModelConnection(url, apiType, apiKey, mid).then(function(result) {
-	    showResult(tr, result.success, result.success ? '' : 'HTTP ' + result.status)
-	  })
-	}
+  const inp = btn.parentElement.querySelector('.ami'), mid = inp.value.trim()
+  if (!mid) { toast('请输入模型 ID', 'error'); return }
+  const url = document.getElementById('aurl').value.trim()
+    const akeys = document.querySelectorAll('#akeys .aki')
+    const configuredKey = Array.from(akeys).map(function(inp) { return inp.value.trim() }).filter(Boolean)[0] || ''
+    const apiType = document.getElementById('afmt').value
+    const tr = document.getElementById('atestR')
+    showSpinner(tr)
+  const providerId = document.getElementById('aid').value.trim()
+  const apiKey = configuredKey || (providerId === 'opencode' ? '' : 'dummy')
+  testModelConnection(url, apiType, apiKey, mid, providerId).then(function(result) {
+    showResult(tr, result.success, result.success ? '' : 'HTTP ' + result.status)
+  })
+}
 
 async function createProv() {
   const nm = document.getElementById('anm').value.trim(), id = document.getElementById('aid').value.trim()
@@ -542,18 +552,18 @@ function rmKeyRow(id, idx) {
 }
 
 async function testKeyRow(id, idx) {
-		  const k = document.getElementById('k-' + id + '-' + idx).value.trim()
-		  const url = document.getElementById('url-' + id).value.trim()
-		  if (!k) { toast('请输入 API Key', 'error'); return }
-		  const apiType = document.getElementById('at-' + id).value
-		  const tr = document.getElementById('tr-' + id)
-		  showSpinner(tr)
-		  const result = await testKeyConnection(url, apiType, k)
-		  showResult(tr, result.success, result.success ? '' : 'HTTP ' + result.status)
-		  if (result.success && result.data) {
-		    showEditModelsList(id, result.data.data || [])
-		  }
-		}
+  const k = document.getElementById('k-' + id + '-' + idx).value.trim()
+  const url = document.getElementById('url-' + id).value.trim()
+  if (!k) { toast('请输入 API Key', 'error'); return }
+  const apiType = document.getElementById('at-' + id).value
+  const tr = document.getElementById('tr-' + id)
+  showSpinner(tr)
+  const result = await testKeyConnection(url, apiType, k, id)
+  showResult(tr, result.success, result.success ? '' : 'HTTP ' + result.status)
+  if (result.success && result.data) {
+    showEditModelsList(id, result.data.data || [])
+  }
+}
 
 function showEditModelsList(id, models) {
   const cid = 'mel-' + id
@@ -572,7 +582,7 @@ function showEditModelsList(id, models) {
       }
     }
   }
-  el.innerHTML = '<label>可用模型 <span class="mu">（点击 + 添加到下方）</span></label>' + renderModelGrid(models, id)
+  el.innerHTML = '<label>可用模型 <span class="mu">（点击 + 添加到下方）</span></label>' + renderModelGrid(models, id, id)
 }
 
 function addMdlToEdit(id, mid) {
@@ -619,7 +629,7 @@ function addMdl(id) {
   const d = document.createElement('div')
   d.className = 'fc mb-3'
   d.dataset.idx = cnt
-  d.innerHTML = '<input type="text" value="' + mid + '" class="fx1" id="mid-' + id + '-' + cnt + '" placeholder="模型 ID"><label class="tg"><input type="checkbox" checked id="men-' + id + '-' + cnt + '"><span class="sl"></span></label><button class="btn btn-gh btn-xs" id="tm-' + id + '-' + cnt + '"><i class="fas fa-plug"></i></button><button class="btn btn-gh btn-xs" id="rm-' + id + '-' + cnt + '"><i class="fas fa-times c-l"></i></button>'
+  d.innerHTML = '<input type="text" value="' + escapeHtml(mid) + '" class="fx1" id="mid-' + escapeHtml(id) + '-' + cnt + '" placeholder="模型 ID"><label class="tg"><input type="checkbox" checked id="men-' + escapeHtml(id) + '-' + cnt + '"><span class="sl"></span></label><button class="btn btn-gh btn-xs" id="tm-' + escapeHtml(id) + '-' + cnt + '"><i class="fas fa-plug"></i></button><button class="btn btn-gh btn-xs" id="rm-' + escapeHtml(id) + '-' + cnt + '"><i class="fas fa-times c-l"></i></button>'
   c.appendChild(d)
   document.getElementById('tm-' + id + '-' + cnt).addEventListener('click', function() { testMdl(id, mid, cnt) })
   document.getElementById('rm-' + id + '-' + cnt).addEventListener('click', function() { rmMdl(id, cnt) })
@@ -634,22 +644,22 @@ function rmMdl(id, idx) {
 }
 
 async function testMdl(id, mid, idx) {
-	  const tr = document.getElementById('tr-' + id)
-	  showSpinner(tr)
-	  try {
-	    const r = await fetch('/admin/api/providers/' + encodeURIComponent(id) + '/test-model', {
-	      method: 'POST',
-	      headers: { 'Content-Type': 'application/json' },
-	      body: JSON.stringify({ modelId: mid })
-	    })
-	    const d = await r.json()
-	    if (d.success && d.data) {
-	      showResult(tr, d.data.success, d.data.success ? '' : (d.data.message || '连接失败'))
-	    } else {
-	      showResult(tr, false, d.message || '测试失败')
-	    }
-	  } catch (e) { showResult(tr, false, '请求失败') }
-	}
+  const tr = document.getElementById('tr-' + id)
+  showSpinner(tr)
+  try {
+    const r = await fetch('/admin/api/providers/' + encodeURIComponent(id) + '/test-model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modelId: mid })
+    })
+    const d = await r.json()
+    if (d.success && d.data) {
+      showResult(tr, d.data.success, d.data.success ? '' : (d.data.message || '连接失败'))
+    } else {
+      showResult(tr, false, d.message || '测试失败')
+    }
+  } catch (e) { showResult(tr, false, '请求失败') }
+}
 
 // proxy keys
 async function genKey() {
@@ -670,7 +680,7 @@ async function doGenKey(exp, name) {
   })
   const d = await r.json()
   if (d.success && d.data) {
-    showM('<h3><i class="fas fa-check-circle c-s"></i> 生成成功</h3><p>请立即复制保存，关闭后将不再显示：</p><div class="mk">' + d.data.key + '</div><div class="fa"><button class="btn btn-p" onclick="closeM();location.reload()">关闭</button></div>')
+    showM('<h3><i class="fas fa-check-circle c-s"></i> 生成成功</h3><p>请妥善保存，切勿泄露：</p><div class="mk">' + d.data.key + '</div><div class="fa"><button class="btn btn-p" onclick="closeM();location.reload()">关闭</button></div>')
   } else toast(d.message || '生成失败', 'error')
 }
 

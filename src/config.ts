@@ -26,6 +26,7 @@ export const KV_KEYS = {
   PROXY_KEYS: 'proxy:keys',
   SESSION_PREFIX: 'admin:session:',
   KEY_HEALTH_PREFIX: 'key:health:',
+  OPENCODE_MIGRATION: 'migration:opencode-default:v1',
 } as const
 
 // 有效期选项（秒）
@@ -39,60 +40,16 @@ export const EXPIRY_OPTIONS: Record<string, number | null> = {
 
 export const DEFAULT_PROVIDERS: Provider[] = [
   {
-    id: 'deepseek',
-    name: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com',
+    id: 'opencode',
+    name: 'OpenCode',
+    baseUrl: 'https://opencode.ai/zen/v1',
     apiType: 'openai',
     apiKeys: [],
     models: [
-      { id: 'deepseek-v4-flash', enabled: true },
-      { id: 'deepseek-v4-pro', enabled: true },
-    ],
-    enabled: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    baseUrl: 'https://api.openai.com/v1',
-    apiType: 'openai',
-    apiKeys: [],
-    models: [
-      { id: 'gpt-4o', enabled: true },
-      { id: 'gpt-4o-mini', enabled: true },
-      { id: 'gpt-5.5', enabled: true },
-      { id: 'gpt-5', enabled: true },
-    ],
-    enabled: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'anthropic',
-    name: 'Anthropic',
-    baseUrl: 'https://api.anthropic.com/v1',
-    apiType: 'anthropic',
-    apiKeys: [],
-    models: [
-      { id: 'claude-opus-4-8', enabled: true },
-      { id: 'claude-sonnet-5', enabled: true },
-      { id: 'claude-fable-5', enabled: true },
-    ],
-    enabled: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'gemini',
-    name: 'Gemini',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1',
-    apiType: 'openai',
-    apiKeys: [],
-    models: [
-      { id: 'gemini-3.5-flash', enabled: true },
-      { id: 'gemini-3.1-pro', enabled: true },
-      { id: 'gemini-3.1-flash-lite', enabled: true },
+      { id: 'deepseek-v4-flash-free', enabled: true },
+      { id: 'mimo-v2.5-free', enabled: true },
+      { id: 'nemotron-3-ultra-free', enabled: true },
+      { id: 'hy3-free', enabled: true },
     ],
     enabled: true,
     createdAt: new Date().toISOString(),

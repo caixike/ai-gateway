@@ -122,26 +122,35 @@ import { DEFAULT_PROVIDERS, PROXY_KEY_PREFIX } from './config'
 
 export async function seedInitialData(env: Env): Promise<void> {
   const providers = await getProviders(env)
-  if (providers.length > 0) return // 已有数据，不做迁移
+  const migrationCompleted = await env.KV.get(KV_KEYS.OPENCODE_MIGRATION)
+  const opencode = DEFAULT_PROVIDERS.find((provider) => provider.id === 'opencode')
 
-  // 首次运行：填充默认数据
-  const seeded = DEFAULT_PROVIDERS.map((p) => ({
-    ...p,
-    apiKeys: p.apiKeys,
-    models: p.models.map((m) => ({ ...m, enabled: true })),
-  }))
-  await setProviders(env, seeded)
-
-  // 创建一个测试转发 Key
-  const keys = await getProxyKeys(env)
-  if (keys.length === 0) {
-    const testKey = {
-      id: crypto.randomUUID(),
-      key: `${PROXY_KEY_PREFIX}${crypto.randomUUID().replace(/-/g, '').substring(0, 16)}`,
-      name: '测试 Key',
-      enabled: true,
-      createdAt: new Date().toISOString(),
+  if (!migrationCompleted) {
+    if (opencode && !providers.some((provider) => provider.id === opencode.id)) {
+      await setProviders(env, [
+        ...providers,
+        {
+          ...opencode,
+          apiKeys: opencode.apiKeys.map((key) => ({ ...key })),
+          models: opencode.models.map((model) => ({ ...model })),
+        },
+      ])
     }
-    await addProxyKey(env, testKey)
+    await env.KV.put(KV_KEYS.OPENCODE_MIGRATION, '1')
+  }
+
+  // 仅首次运行时创建测试转发 Key
+  if (providers.length === 0 && !migrationCompleted) {
+    const keys = await getProxyKeys(env)
+    if (keys.length === 0) {
+      const testKey = {
+        id: crypto.randomUUID(),
+        key: `${PROXY_KEY_PREFIX}${crypto.randomUUID().replace(/-/g, '').substring(0, 16)}`,
+        name: '测试 Key',
+        enabled: true,
+        createdAt: new Date().toISOString(),
+      }
+      await addProxyKey(env, testKey)
+    }
   }
 }
