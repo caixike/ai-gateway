@@ -12,7 +12,7 @@ import {
 } from './storage'
 import { testModelConnection } from './proxy'
 import { fetchOpenCodeModels, isOpenCodeProvider, resolveOpenCodeUrls, testOpenCodeModel } from './opencode'
-import { PROXY_KEY_PREFIX, EXPIRY_OPTIONS } from './config'
+import { PROXY_KEY_PREFIX, EXPIRY_OPTIONS, OPENCODE_DEFAULT_URL } from './config'
 import type {
   Env,
   ApiResponse,
@@ -73,6 +73,10 @@ export async function handleGetProviders(c: Context<{ Bindings: Env }>) {
 
 export async function handleCreateProvider(c: Context<{ Bindings: Env }>) {
   const body = await c.req.json<CreateProviderRequest>()
+  // opencode 未传地址时自动填充
+  if (body.id === 'opencode' && !body.baseUrl) {
+    body.baseUrl = OPENCODE_DEFAULT_URL
+  }
 
   if (!body.id || !body.name || !body.baseUrl) {
     return c.json<ApiResponse>({ success: false, message: 'id、name、baseUrl 为必填项' }, 400)
@@ -187,11 +191,21 @@ export async function handleTestKeyNew(c: Context<{ Bindings: Env }>) {
     apiType?: string
     providerId?: string
   }>()
-  if (!url || !apiKey) {
+  if (!url || (!apiKey && !(providerId && isOpenCodeProvider(providerId)))) {
     return c.json<ApiResponse>({ success: false, message: 'url 和 apiKey 为必填项' }, 400)
   }
 
   if (providerId && isOpenCodeProvider(providerId)) {
+    // 没填 key 时检查是否配了镜像，避免迷惑性报错
+    if (!apiKey) {
+      const mirrors = resolveOpenCodeUrls(c.env)
+      if (mirrors.length === 0) {
+        return c.json<ApiResponse>({
+          success: true,
+          data: { success: false, statusCode: 0, message: '请先填写 API Key 或配置 OPENCODE_MIRRORS_URL 环境变量' },
+        })
+      }
+    }
     const result = await fetchOpenCodeModels(url, [{ key: apiKey, enabled: true }], resolveOpenCodeUrls(c.env))
     return c.json<ApiResponse>({
       success: true,

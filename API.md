@@ -182,6 +182,11 @@ OpenCode 是全新部署唯一的默认提供商，默认启用以下模型：
 6. 一旦收到成功响应便直接透传，包括 SSE 流式响应；流中途失败不会重新请求。
 7. 后台检测到的 OpenCode 模型列表仅显示 `big-pickle` 和以 `-free` 结尾的模型 ID。
 
+**管理后台 OpenCode 特殊处理**：
+- **创建**：ID 输入 `opencode` 时自动填充官方 API 地址 `https://opencode.ai/zen/v1`，模型字段留空，API Key 可选
+- **测试**：未填写 API Key 时自动走镜像地址获取可用模型列表；若镜像未配置则提示"请先填写 API Key 或配置 OPENCODE_MIRRORS_URL 环境变量"
+- **编辑**：提供"获取模型"按钮，一键从镜像或官方获取可用模型列表并添加到表单
+
 ### 环境变量 `OPENCODE_MIRRORS_URL`
 
 类型：`string`（多行文本，每行一个 URL）
@@ -297,13 +302,15 @@ Session 过期返回 `401`：
 
 | 字段 | 必填 | 说明 |
 |------|------|------|
-| `id` | ✅ | 提供商唯一标识，需全局唯一 |
+| `id` | ✅ | 提供商唯一标识，需全局唯一。当 `id` 为 `opencode` 且未传 `baseUrl` 时自动填充 `https://opencode.ai/zen/v1` |
 | `name` | ✅ | 显示名称 |
-| `baseUrl` | ✅ | 提供商 API 基础地址，尾部 `/` 会被自动去除 |
+| `baseUrl` | ✅ ¹ | 提供商 API 基础地址，尾部 `/` 会被自动去除 |
 | `apiType` | ❌ | `openai`（默认）或 `anthropic` |
-| `apiKeys` | ❌ | 字符串数组或 `{key, enabled}` 对象数组 |
+| `apiKeys` | ❌ | 字符串数组或 `{key, enabled}` 对象数组。opencode 可留空（走镜像） |
 | `models` | ❌ | 字符串数组或 `{id, enabled}` 对象数组 |
 | `enabled` | ❌ | 默认 `true` |
+
+> ¹ 当 `id` 为 `opencode` 时 `baseUrl` 可选，后台自动填充，不传不会触发必填校验错误。
 
 **成功响应** (`201`): 返回新建的 Provider 对象。
 
@@ -382,15 +389,22 @@ Session 过期返回 `401`：
 {
   "url": "https://api.deepseek.com",
   "apiKey": "sk-xxx",
-  "apiType": "openai"
+  "apiType": "openai",
+  "providerId": "opencode"
 }
 ```
 
 | 字段 | 必填 | 说明 |
 |------|------|------|
 | `url` | ✅ | API 基础地址，尾部 `/` 会被自动去除 |
-| `apiKey` | ✅ | 待测试的 API Key |
+| `apiKey` | ✅ (opencode 可选) | 待测试的 API Key。opencode 可留空，将走镜像地址获取模型 |
 | `apiType` | ❌ | `openai`（默认）或 `anthropic` |
+| `providerId` | ❌ | 提供商 ID。当为 `opencode` 时走专用逻辑；为空则走标准测试 |
+
+**opencode 特殊行为**:
+- `apiKey` 为空时，自动使用 `OPENCODE_MIRRORS_URL` 配置的镜像地址（`Bearer public`）获取模型
+- 若镜像未配置（`OPENCODE_MIRRORS_URL` 为空），返回明确错误提示："请先填写 API Key 或配置 OPENCODE_MIRRORS_URL 环境变量"
+- 返回的模型列表自动过滤，仅保留 `-free` 结尾和 `big-pickle` 模型
 
 **成功响应**:
 ```json
@@ -404,7 +418,7 @@ Session 过期返回 `401`：
 }
 ```
 
-> 连接成功时 `data.data` 包含上游返回的模型列表；连接失败时 `data.success` 为 `false`，`statusCode` 为 `0`（网络错误）或具体 HTTP 状态码。
+> 连接成功时 `data.data` 包含上游返回的模型列表；连接失败时 `data.success` 为 `false`，`message` 包含错误描述，`statusCode` 为 `0`（网络错误）或具体 HTTP 状态码。
 
 ---
 

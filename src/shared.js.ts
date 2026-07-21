@@ -38,7 +38,7 @@ async function testKeyConnection(url, apiType, key, providerId) {
     })
     var d = await r.json()
     if (d.success && d.data) {
-      return { success: d.data.success, status: d.data.statusCode, data: d.data.data }
+      return { success: d.data.success, status: d.data.statusCode, data: d.data.data, message: d.data.message }
     }
     return { success: false, status: 0, data: null }
   } catch (e) {
