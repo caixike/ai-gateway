@@ -1,5 +1,5 @@
-import { KV_KEYS } from './config'
-import type { Env, Provider, ProxyKey, Session } from './types'
+  import { KV_KEYS } from './config'
+import type { Env, ModelPool, Provider, ProxyKey, Session } from './types'
 
 // ===== 提供商 CRUD =====
 
@@ -153,4 +153,56 @@ export async function seedInitialData(env: Env): Promise<void> {
       await addProxyKey(env, testKey)
     }
   }
+}
+
+// ===== 模型池 CRUD =====
+
+export async function getModelPools(env: Env): Promise<ModelPool[]> {
+  const data = await env.KV.get(KV_KEYS.MODEL_POOLS)
+  return data ? JSON.parse(data) : []
+}
+
+export async function getModelPool(env: Env, id: string): Promise<ModelPool | null> {
+  const pools = await getModelPools(env)
+  return pools.find((p) => p.id === id) ?? null
+}
+
+export async function setModelPools(env: Env, pools: ModelPool[]): Promise<void> {
+  await env.KV.put(KV_KEYS.MODEL_POOLS, JSON.stringify(pools))
+}
+
+export async function addModelPool(env: Env, pool: ModelPool): Promise<void> {
+  const pools = await getModelPools(env)
+  pools.push(pool)
+  await setModelPools(env, pools)
+}
+
+export async function updateModelPool(env: Env, id: string, updates: Partial<ModelPool>): Promise<ModelPool | null> {
+  const pools = await getModelPools(env)
+  const index = pools.findIndex((p) => p.id === id)
+  if (index === -1) return null
+  pools[index] = { ...pools[index], ...updates, updatedAt: new Date().toISOString() }
+  await setModelPools(env, pools)
+  return pools[index]
+}
+
+export async function deleteModelPool(env: Env, id: string): Promise<boolean> {
+  const pools = await getModelPools(env)
+  const filtered = pools.filter((p) => p.id !== id)
+  if (filtered.length === pools.length) return false
+  await setModelPools(env, filtered)
+  return true
+}
+
+// ===== 模型池健康状态 =====
+
+export type PoolHealthMap = Record<string, { failures: number; lastFailedAt?: number }>
+
+export async function getPoolHealth(env: Env, poolId: string): Promise<PoolHealthMap> {
+  const raw = await env.KV.get(KV_KEYS.POOL_HEALTH_PREFIX + poolId)
+  return raw ? JSON.parse(raw) : {}
+}
+
+export async function setPoolHealth(env: Env, poolId: string, health: PoolHealthMap): Promise<void> {
+  await env.KV.put(KV_KEYS.POOL_HEALTH_PREFIX + poolId, JSON.stringify(health))
 }
