@@ -74,6 +74,16 @@ export interface ApiResponse<T = unknown> {
   message?: string
 }
 
+export interface ModelPool {
+  id: string
+  name: string
+  models: string[]
+  enabled: boolean
+  strategy: 'priority' | 'roundrobin'
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Env {
   KV: KVNamespace
   ADMIN_USERNAME?: string
