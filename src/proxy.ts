@@ -1,7 +1,7 @@
 import { Context } from 'hono'
-import { getProvider, getProviders } from './storage'
-import { KV_KEYS, KEY_HEALTH_COOLDOWN_MS, KEY_HEALTH_MAX_FAILURES } from './config'
-import type { Env, ProxyRequestBody } from './types'
+import { getProvider, getProviders, getModelPool, getModelPools } from './storage'
+import { KV_KEYS, KEY_HEALTH_COOLDOWN_MS, KEY_HEALTH_MAX_FAILURES, POOL_MODEL_COOLDOWN_MS, POOL_MODEL_MAX_FAILURES } from './config'
+import type { Env, ModelPool, ProxyRequestBody } from './types'
 import { isOpenCodeProvider, proxyOpenCodeRequest, resolveOpenCodeUrls } from './opencode'
 
 // ===== Key 健康状态类型和辅助函数 =====
@@ -103,6 +103,149 @@ export async function testModelConnection(
   }
 }
 
+// ===== 模型池支持 =====
+
+/** 按健康状态排序模型池中的模型 */
+function sortPoolModels(
+  models: string[],
+  health: Record<string, { failures: number; lastFailedAt?: number }>
+): string[] {
+  const scored = models.map(fullId => {
+    const h = health[fullId]
+    if (!h || h.failures === 0) return { id: fullId, score: 0 }
+
+    const failures = h.failures || 0
+    const lastFailed = h.lastFailedAt || 0
+
+    if (failures >= POOL_MODEL_MAX_FAILURES && Date.now() - lastFailed < POOL_MODEL_COOLDOWN_MS) {
+      return { id: fullId, score: 100 } // 冷却中
+    }
+    if (failures >= POOL_MODEL_MAX_FAILURES) {
+      return { id: fullId, score: 50 } // 冷却到期
+    }
+    return { id: fullId, score: 10 } // 有过失败
+  })
+
+  return scored.sort((a, b) => a.score - b.score).map(s => s.id)
+}
+
+/** 对单个模型尝试请求转发（使用其第一个健康 key） */
+async function tryForwardModel(
+  c: Context<{ Bindings: Env }>,
+  provider: { baseUrl: string; apiType?: string },
+  modelId: string,
+  body: ProxyRequestBody,
+  enabledKeys: Array<{ key: string; enabled: boolean }>
+): Promise<{ success: boolean; response?: Response; error?: Response | null }> {
+  const forwardBody = { ...body, model: modelId }
+  const url = new URL(c.req.url)
+  const subPath = url.pathname.replace(/^\/v1\//, '') || 'chat/completions'
+  const cleanBase = provider.baseUrl.replace(/\/$/, '')
+  const forwardUrl = `${cleanBase}/${subPath}${url.search}`
+
+  for (const keyEntry of enabledKeys) {
+    try {
+      const forwardHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      if (provider.apiType === 'anthropic') {
+        forwardHeaders['x-api-key'] = keyEntry.key
+        forwardHeaders['anthropic-version'] = '2023-06-01'
+      } else {
+        forwardHeaders['Authorization'] = `Bearer ${keyEntry.key}`
+      }
+
+      const response = await fetch(forwardUrl, {
+        method: c.req.method,
+        headers: forwardHeaders,
+        body: JSON.stringify(forwardBody),
+        signal: AbortSignal.timeout(60000),
+      })
+
+      if (response.ok) {
+        const responseHeaders: Record<string, string> = {
+          'Content-Type': response.headers.get('Content-Type') || 'application/json',
+          'Cache-Control': 'no-store',
+          'X-Pool-Model': modelId,
+        }
+        return {
+          success: true,
+          response: new Response(response.body, {
+            status: response.status,
+            headers: responseHeaders,
+          }),
+        }
+      }
+
+      if (response.status === 429) continue
+      if (response.status === 401 || response.status === 403 || response.status >= 500) {
+        continue
+      }
+      return { success: false, error: response }
+    } catch {
+      continue
+    }
+  }
+
+  return { success: false, error: null }
+}
+
+/** 处理模型池请求：按健康状态轮询池内所有模型 */
+async function handlePoolProxy(c: Context<{ Bindings: Env }>, pool: ModelPool, body: ProxyRequestBody) {
+  const poolHealthKey = KV_KEYS.POOL_HEALTH_PREFIX + pool.id
+  const raw = await c.env.KV.get(poolHealthKey)
+  const poolHealth: Record<string, { failures: number; lastFailedAt?: number }> = raw ? JSON.parse(raw) : {}
+
+  // 按健康状态排序模型：健康优先，冷却中排后
+  const sortedModels = sortPoolModels(pool.models, poolHealth)
+
+  let lastError: Response | null = null
+  let lastErrorDetail = ''
+
+  for (const fullModelId of sortedModels) {
+    const parsed = parseModelId(fullModelId)
+    if (!parsed) continue
+
+    const { providerId, modelId } = parsed
+    const provider = await getProvider(c.env, providerId)
+    if (!provider || !provider.enabled) continue
+
+    const modelConfig = provider.models.find(m => m.id === modelId)
+    if (!modelConfig || !modelConfig.enabled) continue
+
+    const enabledKeys = provider.apiKeys.filter(k => k.enabled)
+    if (enabledKeys.length === 0) continue
+
+    const result = await tryForwardModel(c, provider, modelId, body, enabledKeys)
+    if (result.success) {
+      // 成功：清除该模型的健康记录
+      delete poolHealth[fullModelId]
+      await c.env.KV.put(poolHealthKey, JSON.stringify(poolHealth))
+      return result.response
+    }
+
+    // 失败：记录健康状态
+    const h = poolHealth[fullModelId] || { failures: 0 }
+    h.failures++
+    h.lastFailedAt = Date.now()
+    poolHealth[fullModelId] = h
+    await c.env.KV.put(poolHealthKey, JSON.stringify(poolHealth))
+    if (result.error) {
+      lastError = result.error
+      try { lastErrorDetail = await result.error.text() } catch {}
+    }
+  }
+
+  // 全部失败
+  return c.json({
+    error: {
+      message: `模型池 "${pool.id}" 中所有模型均尝试失败`,
+      type: 'pool_exhausted',
+      detail: lastErrorDetail.substring(0, 500),
+    },
+  }, 502)
+}
+
 /** 处理 /v1/chat/completions 等 API 转发 */
 export async function handleProxy(c: Context<{ Bindings: Env }>) {
   try {
@@ -111,6 +254,12 @@ export async function handleProxy(c: Context<{ Bindings: Env }>) {
 
     if (!model) {
       return c.json({ error: { message: '缺少 model 参数', type: 'invalid_request_error' } }, 400)
+    }
+
+    // === 模型池支持：如果 model 是模型池 ID，走池代理 ===
+    const pool = await getModelPool(c.env, model)
+    if (pool && pool.enabled) {
+      return handlePoolProxy(c, pool, body)
     }
 
     const parsed = parseModelId(model)
@@ -341,6 +490,7 @@ export async function handleProxy(c: Context<{ Bindings: Env }>) {
 /** 处理 /v1/models — 返回所有已启用的模型（含提供商前缀） */
 export async function handleModels(c: Context<{ Bindings: Env }>) {
   const providers = await getProviders(c.env)
+  const modelPools = await getModelPools(c.env)
 
   const models: Array<{
     id: string
@@ -364,6 +514,19 @@ export async function handleModels(c: Context<{ Bindings: Env }>) {
         owned_by: provider.id,
       })
     }
+  }
+
+  // 列出模型池
+  for (const pool of modelPools) {
+    if (!pool.enabled) continue
+    models.push({
+      id: pool.id,
+      provider: 'pool',
+      provider_name: pool.name || pool.id,
+      object: 'model',
+      created: Math.floor(Date.now() / 1000),
+      owned_by: 'pool',
+    })
   }
 
   return c.json({
