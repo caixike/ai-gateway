@@ -21,11 +21,19 @@ export const KEY_HEALTH_COOLDOWN_MS = 5 * 60 * 1000
 // 连续失败多少次后降权
 export const KEY_HEALTH_MAX_FAILURES = 5
 
+// 模型池 - 模型降权后自动恢复的冷却时间 (毫秒)
+export const POOL_MODEL_COOLDOWN_MS = 5 * 60 * 1000
+
+// 模型池 - 连续失败多少次后降权
+export const POOL_MODEL_MAX_FAILURES = 3
+
 export const KV_KEYS = {
   PROVIDERS: 'providers',
   PROXY_KEYS: 'proxy:keys',
   SESSION_PREFIX: 'admin:session:',
   KEY_HEALTH_PREFIX: 'key:health:',
+  MODEL_POOLS: 'config:model_pools',
+  POOL_HEALTH_PREFIX: 'pool_health:',
   OPENCODE_MIGRATION: 'migration:opencode-default:v1',
 } as const
 
