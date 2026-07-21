@@ -1,6 +1,6 @@
 import { Context } from 'hono'
 import { getProviders, getProxyKeys } from './storage'
-import { SITE_CONFIG } from './config'
+import { SITE_CONFIG, OPENCODE_DEFAULT_URL } from './config'
 import type { Env } from './types'
 import { CSS_CONTENT } from './pages.css'
 import { SHARED_JS } from './shared.js'
@@ -115,7 +115,7 @@ function copyText(t, el) {
 
 </script>
 </body></html>`)
-		}
+}
 
 export async function renderLoginPage(c: Context<{ Bindings: Env }>) {
     return c.html(`<!DOCTYPE html><html lang="zh-CN">
@@ -153,7 +153,7 @@ async function l() {
 }
 </script>
 </body></html>`)
-	}
+}
 
 // ===== 管理后台 =====
 
@@ -296,6 +296,7 @@ ${H('管理')}
         </div>
         <div class="fc gap-8 mt-2">
           <span class="fx1"></span>
+          ${p.id === 'opencode' ? '<button class="btn btn-g btn-xs" onclick="fetchEditModels(\'' + p.id + '\')"><i class="fas fa-download"></i> 获取模型</button>' : ''}
           <button class="btn btn-g btn-xs" onclick="save('${p.id}')"><i class="fas fa-save"></i> 保存</button>
           <button class="btn btn-d btn-xs" onclick="del('${p.id}')"><i class="fas fa-trash"></i> 删除</button>
         </div>
@@ -409,6 +410,13 @@ function tog(id) {
 function showAdd() { document.getElementById('af').classList.remove('hd') }
 function hideAdd() { document.getElementById('af').classList.add('hd'); document.getElementById('amc').classList.add('hd') }
 
+// aid 输入 opencode 时自动填充 API 地址
+document.getElementById('aid').addEventListener('input', function() {
+  if (this.value.trim() === 'opencode') {
+    document.getElementById('aurl').value = '${OPENCODE_DEFAULT_URL}'
+  }
+})
+
 // provider api keys (add form)
 function addAKeyRow() {
   const c = document.getElementById('akeys')
@@ -441,16 +449,16 @@ function renderModelGrid(models, editId, providerId) {
 
 function testNewAKey(btn) {
   const inp = btn.parentElement.querySelector('.aki'), k = inp.value.trim()
-  if (!k) { toast('请输入 API Key', 'error'); return }
+  const providerId = document.getElementById('aid').value.trim()
+  if (!k && providerId !== 'opencode') { toast('请输入 API Key', 'error'); return }
   const url = document.getElementById('aurl').value.trim()
   if (!url) { toast('请先填写 API 地址', 'error'); return }
   const apiType = document.getElementById('afmt').value
   const tr = document.getElementById('atestR')
   showSpinner(tr)
-    const providerId = document.getElementById('aid').value.trim()
-    testKeyConnection(url, apiType, k, providerId).then(function(result) {
-      if (result.success && result.data) {
-        document.getElementById('amcl').innerHTML = renderModelGrid(result.data.data || [], null, providerId)
+  testKeyConnection(url, apiType, k, providerId).then(function(result) {
+    if (result.success && result.data) {
+      document.getElementById('amcl').innerHTML = renderModelGrid(result.data.data || [], null, providerId)
       document.getElementById('amc').classList.remove('hd')
     } else {
       document.getElementById('amc').classList.add('hd')
@@ -560,6 +568,21 @@ async function testKeyRow(id, idx) {
   showSpinner(tr)
   const result = await testKeyConnection(url, apiType, k, id)
   showResult(tr, result.success, result.success ? '' : 'HTTP ' + result.status)
+  if (result.success && result.data) {
+    showEditModelsList(id, result.data.data || [])
+  }
+}
+
+// opencode 编辑表单 — 获取模型（复用 testKeyConnection 逻辑）
+async function fetchEditModels(id) {
+  const url = document.getElementById('url-' + id).value.trim()
+  const keys = getKeys(id)
+  const apiKey = keys.length > 0 ? keys[0].key : ''
+  const apiType = document.getElementById('at-' + id).value
+  const tr = document.getElementById('tr-' + id)
+  showSpinner(tr)
+  const result = await testKeyConnection(url, apiType, apiKey, id)
+  showResult(tr, result.success, result.success ? '' : escapeHtml(result.message || '获取模型失败'))
   if (result.success && result.data) {
     showEditModelsList(id, result.data.data || [])
   }
